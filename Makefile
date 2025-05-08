@@ -1,8 +1,7 @@
 CC      := gcc
 NVCC    := nvcc
 CFLAGS  := -O3 -Iinclude
-LDFLAGS := -lcudart
-
+LDFLAGS := -lcudart -lm
 TARGET  := dt_cuda
 
 SRCS    := src/main.c src/decision_tree.c src/decision_tree_cuda.cu
@@ -19,10 +18,10 @@ decision_tree.o: src/decision_tree.c include/decision_tree.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 decision_tree_cuda.o: src/decision_tree_cuda.cu include/decision_tree.h
-	$(NVCC) -c $< -o $@
+	$(NVCC) $(CFLAGS) -c $< -o $@
 
 $(TARGET): $(OBJS)
-	$(NVCC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+	$(NVCC) $(CFLAGS) $(OBJS) -o $@ $(LDFLAGS)
 
 clean:
 	rm -f $(TARGET) *.o
