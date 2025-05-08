@@ -3,7 +3,7 @@
 #include <math.h> // for log2f()
 #include "decision_tree.h"
 
-// compute entropy for counts (device)
+// Device helper to compute entropy
 __device__ inline float entropy(int c0, int c1)
 {
     int N = c0 + c1;
@@ -18,7 +18,7 @@ __device__ inline float entropy(int c0, int c1)
     return e;
 }
 
-// GPU kernel: weighted entropy impurity
+// Kernel: evaluate one split per thread
 __global__ void compute_impurity(
     const float *data, const int *labels, const int *indices,
     int n, int n_feats, int n_thr, const float *thr, float *imps)
@@ -59,6 +59,7 @@ __global__ void compute_impurity(
     imps[j] = (ln / N) * Hleft + (rn / N) * Hright;
 }
 
+// Host wrapper: alloc/copy/launch/copy back/find best/free
 extern "C" void find_best_split_cuda(
     const float *h_data, const int *h_labels, const int *h_idx,
     int n, int n_feats, int n_thr,

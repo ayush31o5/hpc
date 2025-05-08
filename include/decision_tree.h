@@ -2,47 +2,37 @@
 #define DECISION_TREE_H
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 #include <float.h>
 
-#define MAX_FEATURES 31 // 28 base/categorical + 3 interactions
-#define MAX_SAMPLES 10000
-#define MAX_THRESHOLDS 200 // split resolution
+#define MAX_FEATURES     31
+#define MAX_SAMPLES   10000
+#define MAX_THRESHOLDS  200
 
 // Regularization
-#define MIN_SAMPLES_SPLIT 10 // require at least this many samples to attempt a split
-#define MIN_SAMPLES_LEAF 5   // require at least this many samples in each leaf
+#define MIN_SAMPLES_SPLIT 10
+#define MIN_SAMPLES_LEAF   5
 
-    typedef struct TreeNode
-    {
-        int feature;
-        float threshold;
-        int is_leaf;
-        int prediction;
-        struct TreeNode *left, *right;
-    } TreeNode;
+typedef struct TreeNode {
+    int feature;
+    float threshold;
+    int is_leaf;
+    int prediction;
+    struct TreeNode *left, *right;
+} TreeNode;
 
-    // load all features into data[][] and labels[]
-    int load_csv(const char *path, float data[][MAX_FEATURES], int labels[]);
+int load_csv(const char *path, float data[][MAX_FEATURES], int labels[]);
+TreeNode* train_tree(int *indices, int n, int max_depth,
+                     float data[][MAX_FEATURES], int labels[]);
+int predict_tree(const TreeNode *node, const float sample[]);
+void free_tree(TreeNode *node);
 
-    // train a CART tree up to max_depth
-    TreeNode *train_tree(int *indices, int n, int max_depth,
-                         float data[][MAX_FEATURES], int labels[]);
-
-    // predict one sample
-    int predict_tree(const TreeNode *node, const float sample[]);
-
-    // free the tree
-    void free_tree(TreeNode *node);
-
-    // GPU-accelerated split finder
-    void find_best_split_cuda(const float *data, const int *labels, const int *indices,
-                              int n, int n_feats, int n_thr,
-                              const float *thresholds,
-                              int *out_feature, float *out_threshold);
+void find_best_split_cuda(const float *data, const int *labels, const int *indices,
+                          int n, int n_feats, int n_thr,
+                          const float *thresholds,
+                          int *out_feature, float *out_threshold);
 
 #ifdef __cplusplus
 }

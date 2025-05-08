@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
+#include <string.h>
+#include <time.h>         // clock_gettime
+#include <cuda_runtime.h> // CUDA timing APIs
 #include <float.h>
 #include "decision_tree.h"
 
-// simple Fisher–Yates shuffle
+// Fisher–Yates shuffle
 static void shuffle(int *a, int n)
 {
     for (int i = n - 1; i > 0; --i)
@@ -18,17 +20,21 @@ static void shuffle(int *a, int n)
 
 int main(int argc, char **argv)
 {
-    if (argc != 2)
+    if (argc < 2 || argc > 3)
     {
-        fprintf(stderr, "Usage: %s data/student-data.csv\n", argv[0]);
+        fprintf(stderr, "Usage: %s data/student-data.csv [cpu|gpu]\n", argv[0]);
         return EXIT_FAILURE;
     }
+    int use_gpu = 1;
+    if (argc == 3 && strcmp(argv[2], "cpu") == 0)
+        use_gpu = 0;
+
     srand(1234);
 
     static float data[MAX_SAMPLES][MAX_FEATURES];
     static int labels[MAX_SAMPLES];
 
-    // 1) Load & encode features
+    // 1) Load & encode
     int n = load_csv(argv[1], data, labels);
     if (n <= 0)
     {
@@ -39,12 +45,12 @@ int main(int argc, char **argv)
     // 2) Add 3 interaction features
     for (int i = 0; i < n; ++i)
     {
-        data[i][28] = data[i][4] * data[i][5];  // studytime * failures
-        data[i][29] = data[i][11] * data[i][9]; // absences * Dalc
-        data[i][30] = data[i][7] * data[i][8];  // freetime * goout
+        data[i][28] = data[i][4] * data[i][5];
+        data[i][29] = data[i][11] * data[i][9];
+        data[i][30] = data[i][7] * data[i][8];
     }
 
-    // 3) Normalize each feature to [0,1]
+    // 3) Normalize all features to [0,1]
     for (int f = 0; f < MAX_FEATURES; ++f)
     {
         float mn = FLT_MAX, mx = -FLT_MAX;
@@ -72,8 +78,38 @@ int main(int argc, char **argv)
     int *train_idx = idx;
     int *test_idx = idx + train_n;
 
-    // 5) Train tree (depth=12)
-    TreeNode *root = train_tree(train_idx, train_n, 12, data, labels);
+    // 5) Train & time
+    TreeNode *root;
+    if (!use_gpu)
+    {
+        struct timespec t0, t1;
+        clock_gettime(CLOCK_MONOTONIC, &t0);
+
+        root = train_tree(train_idx, train_n, 12, data, labels);
+
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        double cpu_secs = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) * 1e-9;
+        printf("CPU training time: %.6f s\n", cpu_secs);
+    }
+    else
+    {
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+
+        // **Fixed: pass the stream argument (0)**
+        cudaEventRecord(start, 0);
+        root = train_tree(train_idx, train_n, 12, data, labels);
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(stop);
+
+        float gpu_ms;
+        cudaEventElapsedTime(&gpu_ms, start, stop);
+        printf("GPU training time: %.3f ms\n", gpu_ms);
+
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
+    }
 
     // 6) Evaluate
     int correct = 0;
